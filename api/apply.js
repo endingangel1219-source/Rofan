@@ -43,7 +43,8 @@ async function selfTest(res, token, dataSource, db) {
 
   if (!token) {
     line.push("결과: 토큰이 없습니다. Vercel 환경변수에 NOTION_TOKEN 을 넣고 Redeploy 하세요.");
-    return res.status(200).type("text/plain; charset=utf-8").send(line.join("\n"));
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    return res.status(200).send(line.join("\n"));
   }
 
   let okAny = false;
@@ -67,7 +68,8 @@ async function selfTest(res, token, dataSource, db) {
   line.push(okAny
     ? "결과: 연결 정상입니다. 테스트에서 신청서를 제출해보세요."
     : "결과: 토큰은 있는데 데이터베이스를 못 읽습니다.\n      노션에서 DB 우측 상단 ⋯ → 연결 → 만든 통합을 선택했는지 확인하세요.");
-  return res.status(200).type("text/plain; charset=utf-8").send(line.join("\n"));
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    return res.status(200).send(line.join("\n"));
 }
 
 module.exports = async (req, res) => {
