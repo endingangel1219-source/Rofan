@@ -1263,7 +1263,9 @@ const CONFIG = {
   deadline: "2026-10-31",
   /* 신청서가 저장되는 서버 주소. Vercel에 올리면 /api/apply 가 노션 DB로 보냅니다.
      비워두면 전송 없이 잠금만 해제됩니다(미리보기용). */
-  apiEndpoint: "/api/apply",
+  /* 구글 시트 Apps Script 웹 앱 주소 (https://script.google.com/macros/s/.../exec) */
+  sheetEndpoint: "https://script.google.com/macros/s/AKfycbz2IIamXRdHCLapb7-RmBhAfxKenP1otk04JkcK6k6T_LzQut4a8r2fM1gK7tioStkx/exec",
+  apiEndpoint: "",
   formEndpoint: "",
   formFields: { name: "entry.1000001", gender: "entry.1000002", age: "entry.1000003", region: "entry.1000004", match: "entry.1000005", phone: "entry.1000006", character: "entry.1000007" },
 };
@@ -2074,7 +2076,7 @@ function afterRender() {
         if (sc) sc.style.opacity = "1.35";
         if (story) story.style.setProperty("--base", "320ms");
         const d = (story && !REDUCE) ? typeOut(story) : 0;
-        if (skip && !REDUCE) skip.hidden = false;
+        if (skip) skip.hidden = true;
         app.querySelectorAll(".choice").forEach((el, i) => { el.style.animationDelay = (280 + d * 0.55 + i * 90) + "ms"; });
       };
       sceneRoll = rollUp;
@@ -2110,7 +2112,7 @@ function afterRender() {
       }
       if (story) story.style.setProperty("--base", (start + (hold > 0 ? 180 : 0)) + "ms");
       const dur = (story && !REDUCE) ? typeOut(story) : 0;
-      if (skip && !REDUCE) skip.hidden = false;
+      if (skip) skip.hidden = !(!REDUCE && (openStage || hold > 0));
       app.querySelectorAll(".choice").forEach((el, i) => {
         el.style.animation = "slideUp 0.5s cubic-bezier(0.2,0.9,0.3,1.2) both";
         el.style.animationDelay = (start + (hold > 0 ? 180 : 0) + dur + i * 80) + "ms";
@@ -2284,27 +2286,12 @@ function rollName(btn) {
 }
 
 /* 본문을 한 글자씩 — 태그는 그대로 두고 글자만 감싼다 */
-function typeOut(root, speed = 26) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  let i = 0;
-  /* 한 글자씩이 아니라 어절 단위로 올린다.
-     타이밍은 글자 수로 계산하므로 보이는 속도는 그대로, 움직이는 요소만 1/4로 줄어든다. */
-  for (const n of nodes) {
-    const frag = document.createDocumentFragment();
-    for (const part of n.textContent.split(/(\s+)/)) {
-      if (part === "") continue;
-      if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(part)); i += part.length; continue; }
-      const sp = document.createElement("span");
-      sp.className = "ch"; sp.textContent = part;
-      sp.style.setProperty("--i", i);
-      i += part.length;
-      frag.appendChild(sp);
-    }
-    n.parentNode.replaceChild(frag, n);
-  }
-  return i * speed + 120;
+/* 글을 한 자씩 띄우지 않고 문단째로 보여준다.
+   화면에 동시에 움직이는 요소가 사라져서 장면 전환이 가장 가벼워지는 지점이다.
+   돌려주는 값은 "글 다음에 선택지가 뜨도록" 두는 짧은 간격. */
+function typeOut(root) {
+  if (root) root.classList.add("done");
+  return 300;
 }
 function finishTyping() {
   const ib = document.getElementById("stage-block");
@@ -2902,7 +2889,21 @@ async function sendLead(btn) {
   const line = `[레포트 신청]\n이름: ${lead.nick}\n성별: ${lead.gender}\n나이대: ${lead.age}\n거주지: ${lead.region}\n결과 일치율: ${lead.match}%\n연락처: ${lead.phone}\n인물: ${fullName(id)}\n개인정보 수집·이용 동의함`;
 
   let sent = true;
-  if (CONFIG.apiEndpoint) {
+  if (CONFIG.sheetEndpoint) {
+    sent = false;
+    try {
+      const res = await fetch(CONFIG.sheetEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          name: lead.nick, gender: lead.gender, age: lead.age, region: lead.region,
+          match: lead.match, phone: lead.phone, character: CHARS[id].job, consent: true
+        })
+      });
+      const j = await res.json().catch(() => null);
+      sent = !!(j && j.ok);
+    } catch (err) { sent = false; }
+  } else if (CONFIG.apiEndpoint) {
     sent = false;
     try {
       const res = await fetch(CONFIG.apiEndpoint, {
