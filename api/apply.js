@@ -65,6 +65,17 @@ async function tryCreate(token, dataSource, db, properties) {
   return { ok: false, log };
 }
 
+/* 신청이 실패하면 그 이유를 같은 DB에 한 줄 남긴다 (밖에서 원인을 보기 위함) */
+async function logFailure(token, dataSource, db, reason, raw) {
+  try {
+    await tryCreate(token, dataSource, db, {
+      "이름": { title: [{ text: { content: "⚠ 전송 실패 기록" } }] },
+      "메모": { rich_text: [{ text: { content: (reason + " | " + raw).slice(0, 1900) } }] },
+      "상태": { status: { name: "미응답" } }
+    });
+  } catch (e) {}
+}
+
 /* 브라우저로 열었을 때 보여주는 연결 점검 결과 */
 async function selfTest(res, token, dataSource, db, write) {
   const line = [];
@@ -138,11 +149,19 @@ module.exports = async (req, res) => {
     try { body = JSON.parse(body); } catch (e) { body = {}; }
   }
   body = body || {};
+  const raw = "type=" + typeof req.body + " ct=" + (req.headers && req.headers["content-type"]) + " body=" + JSON.stringify(body).slice(0, 600);
 
   const name = clean(body.name, 40);
   const phone = clean(body.phone, 30);
-  if (!name || !phone) return res.status(400).json({ ok: false, error: "missing" });
-  if (!/^[0-9+\-() .]{8,}$/.test(phone)) return res.status(400).json({ ok: false, error: "phone" });
+  const digits = phone.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFEE0)).replace(/\D/g, "");
+  if (!name || !phone) {
+    await logFailure(TOKEN, DATA_SOURCE, DB, "이름 또는 번호 비어 있음", raw);
+    return res.status(400).json({ ok: false, error: "missing" });
+  }
+  if (digits.length < 8) {
+    await logFailure(TOKEN, DATA_SOURCE, DB, "번호 형식", raw);
+    return res.status(400).json({ ok: false, error: "phone" });
+  }
 
   const matchRaw = Number(body.match);
   const match = Number.isFinite(matchRaw) ? Math.max(0, Math.min(100, Math.round(matchRaw))) : null;
@@ -151,6 +170,7 @@ module.exports = async (req, res) => {
 
   const result = await tryCreate(TOKEN, DATA_SOURCE, DB, properties);
   if (result.ok) return res.status(200).json({ ok: true });
+  await logFailure(TOKEN, DATA_SOURCE, DB, "노션 거부: " + result.log.join(" / "), raw);
   return res.status(502).json({ ok: false, error: "notion", detail: result.log });
 
 };
