@@ -1551,7 +1551,7 @@ function daysLeft() {
 
 let wasUnlocked = false;
 try { wasUnlocked = sessionStorage.getItem("rofan-report") === "1"; } catch (e) {}
-let state = { screen: "cover", idx: 0, answers: [], name: "", openQuest: null, unlocked: wasUnlocked };
+let state = { screen: "cover", idx: 0, answers: [], name: "", openQuest: null, unlocked: false, applied: wasUnlocked };
 let wipeEnd = 0;
 const app = document.getElementById("app");
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1601,7 +1601,6 @@ function renderCover() {
     <div class="roster reveal d3" aria-label="등장 가능한 9명의 인물">${roster}</div>
     <div class="meta-row reveal d3"><span><b>12</b>개의 장면</span><span>약 <b>3</b>분</span><span><b>9</b>명의 인물</span></div>
     <button class="btn reveal d4" data-act="start">이야기 속으로 들어가기</button>
-    <p class="fine reveal d4">버전 85 · 에필로그 문장 수정</p>
   </section>`;
 }
 
@@ -1849,7 +1848,7 @@ function renderResult() {
   const LK = locked ? " locked-box" : "";
   const lockTag = (mini) => locked ? `
     <div class="lock-tag${mini ? " mini" : ""}">
-      <button class="lock-go" data-act="to-report">전체 결과 알기</button>
+      <button class="lock-go" data-act="to-report">전체 결과 레포트 받기</button>
     </div>` : "";
 
   /* 잠금 상태에서는 첫 문장만 보이고 나머지는 흐리게 */
@@ -1923,8 +1922,8 @@ function renderResult() {
         <div class="row"><dt>성장 포인트<small>Level up</small></dt><dd>${locked ? `<span class="peek">${c.growth}</span>` : c.growth}</dd></div>
       </dl>${locked ? `
       <div class="sheet-lock">
-        <p>흐린 부분까지 전부 보려면<br><b>자세한 레포트</b>를 신청해주세요</p>
-        <button class="lock-go" data-act="to-report">전체 결과 알기</button>
+        <p>흐린 부분의 내용은<br><b>자세한 레포트</b>에 모두 담아 보내드려요</p>
+        <button class="lock-go" data-act="to-report">전체 결과 레포트 받기</button>
       </div>` : ""}
     </section>`);
 
@@ -2011,9 +2010,9 @@ function renderResult() {
         <p class="offer-note">신청해주신 분들 중 <b>추첨</b>으로 무료 15분 전화 상담권을 드려요.</p>
         <p class="toast" id="pay-toast" role="status"></p>
       </div>
-      <div id="report-box">${state.unlocked ? `
-        <p class="report-done"><span class="key">Unlocked</span>신청이 접수되었어요.<br>잠겨 있던 내용이 모두 열렸습니다.</p>` : `
-        <button class="btn" data-act="report">레포트 신청하고 전체 결과 열기</button>
+      <div id="report-box">${state.applied ? `
+        <p class="report-done"><span class="key">Received</span>신청이 접수되었어요.<br>자세한 레포트는 남겨주신 연락처로 따로 보내드릴게요.</p>` : `
+        <button class="btn" data-act="report">자세한 레포트 신청하기</button>
         <p class="fine" style="margin-top:12px">7개 질문 · 40초면 끝나요</p>`}
       </div>
       <p class="toast" id="report-toast" role="status"></p>
@@ -2623,7 +2622,7 @@ app.addEventListener("click", async (e) => {
   }
   else if (act === "to-report") { document.getElementById("report")?.scrollIntoView({ behavior: SOFT ? "auto" : "smooth", block: "center" }); }
   else if (act === "report") { openFunnel(); }
-  else if (act === "restart") { state = { screen: "cover", idx: 0, answers: [], answerIdx: [], name: state.name, openQuest: null, stageSeen: {}, unlocked: state.unlocked, tie: null, tiedList: null, cardRolled: false, skillOpen: false, rStep: 0 }; go("cover"); }
+  else if (act === "restart") { state = { screen: "cover", idx: 0, answers: [], answerIdx: [], name: state.name, openQuest: null, stageSeen: {}, unlocked: false, applied: state.applied, tie: null, tiedList: null, cardRolled: false, skillOpen: false, rStep: 0 }; go("cover"); }
 });
 
 /* ============ 결과 카드 이미지 만들기 ============ */
@@ -2993,14 +2992,15 @@ async function sendLead(btn) {
     return;
   }
 
-  unlockAll();
+  state.applied = true;
+  try { sessionStorage.setItem("rofan-report", "1"); } catch (e) {}
   closeFunnel();
   const box = document.getElementById("report-box");
   if (box) {
-    box.innerHTML = `<p class="report-done"><span class="key">Unlocked</span>${esc(lead.nick)}님, 신청이 접수되었어요.<br>잠겨 있던 내용이 모두 열렸습니다.</p>`;
+    box.innerHTML = `<p class="report-done"><span class="key">Received</span>${esc(lead.nick)}님, 신청이 접수되었어요.<br>자세한 레포트는 남겨주신 연락처로 따로 보내드릴게요.</p>`;
   }
   const toast = document.getElementById("report-toast");
-  if (toast) toast.textContent = "잠겨 있던 내용이 모두 열렸어요.";
+  if (toast) toast.textContent = "신청이 접수되었어요. 레포트는 따로 보내드릴게요.";
   document.getElementById("report")?.scrollIntoView({ behavior: SOFT ? "auto" : "smooth", block: "center" });
 }
 
